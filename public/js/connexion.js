@@ -11,7 +11,7 @@ async function connexion(event) {
         mot_de_passe: inputMotPasse.value
     };
 
-    let response = await fetch('/api/connexion', {
+    let response = await fetch('/connexion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

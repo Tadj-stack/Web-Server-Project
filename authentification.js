@@ -12,21 +12,20 @@ const config = {
 
 
 passport.use(new Strategy(config, async (courriel, mot_de_passe, done) => {
-    console.log("hello")
+
     try {
         // On va chercher l'utilisateur dans la base
         // de données avec son identifiant, le
         // courriel ici
         const utilisateur = await getUtilisateurParCourriel(courriel);
-        console.log(utilisateur)
-        console.log('utilisateur')
+
 
 
         // Si on ne trouve pas l'utilisateur, on
         // retourne que l'authentification a échoué
         // avec un message
         if (!utilisateur) {
-            console.log('utilisateur')
+
 
             return done(null, false, { erreur: 'mauvais_courriel' });
         }
@@ -35,8 +34,7 @@ passport.use(new Strategy(config, async (courriel, mot_de_passe, done) => {
         // son mot de passe dans la base de données
         // avec celui envoyé au serveur. On utilise
         // une fonction de bcrypt pour le faire
-        console.log(mot_de_passe)
-        console.log(utilisateur.mot_de_passe)
+
         const valide = await bcrypt.compare(mot_de_passe, utilisateur.mot_de_passe);
 
         // Si les mot de passe ne concorde pas, on

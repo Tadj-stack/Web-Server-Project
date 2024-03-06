@@ -19,25 +19,8 @@ export const getCommande = async () => {
         ORDER BY commande.id_commande;`
     );
 
-    /* Construction d'une liste de commandes plus simple à utiliser en 
-    Javascript. La liste aura le format suivant:
-    [
-        {
-            id_commande: ?,
-            date: ?,
-            id_etat_commande: ?,
-            produit: [
-                {
-                    id_produit: ?,
-                    chemin_image: ?,
-                    nom: ?,
-                    quantite: ?,
-                },
-                ...
-            ]
-        },
-        ...
-    ]*/
+
+
     // Dernier identifiant sur lequel on a bouclé
     let lastId = -1;
 
@@ -68,6 +51,52 @@ export const getCommande = async () => {
     return commandes;
 }
 
+export const getCommande_panier = async (idUtilisateur) => {
+    let connection = await connectionPromise;
+
+    let results = await connection.all(
+        `SELECT commande.id_commande, date, id_etat_commande,
+            produit.id_produit, chemin_image, produit.nom, quantite
+        FROM commande
+        INNER JOIN commande_produit ON commande.id_commande = commande_produit.id_commande
+        INNER JOIN produit ON commande_produit.id_produit = produit.id_produit
+        WHERE id_etat_commande = 2 AND commande.id_utilisateur = ?
+        ORDER BY commande.id_commande DESC
+            `,
+        [idUtilisateur]
+    );
+
+    // Construction d'une liste de commandes avec les produits associés
+    let commande = [];
+
+    // Dernier identifiant sur lequel on a bouclé
+    let lastId = -1;
+
+    for (const row of results) {
+        // Si c'est la première fois qu'on rencontre l'identifiant de la commande,
+        // on lui crée une entrée dans notre tableau de commandes.
+        if (lastId != row.id_commande) {
+            lastId = row.id_commande;
+            commande.push({
+                id_commande: row.id_commande,
+                date: (new Date(row.date)).toLocaleString('fr-ca'),
+                id_etat_commande: row.id_etat_commande,
+                produit: []
+            });
+        }
+
+        // On ajoute les données des produits dans la commande.
+        commande[commande.length - 1].produit.push({
+            id_produit: row.id_produit,
+            chemin_image: row.chemin_image,
+            nom: row.nom,
+            quantite: row.quantite
+        });
+    }
+
+    return commande;
+}
+
 /**
  * Soumet le panier en ajoutant une commande comprenant les données du panier 
  * et en vidant le panier dans la base de données.
@@ -78,11 +107,12 @@ export const soumettreCommande = async (idUtilisateur) => {
     // Modifie la commande de panier pour la soumettre.
     await connection.run(
         `UPDATE commande
-        SET id_etat_commande = 2, date = ?, id_utilisateur = ?
-        WHERE id_etat_commande = 1`,
+        SET id_etat_commande = 2, date = ?
+        WHERE id_etat_commande = 1 AND id_utilisateur = ?`,
         [Date.now(), idUtilisateur]
     );
-}
+};
+
 
 
 /**

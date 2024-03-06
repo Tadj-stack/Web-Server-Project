@@ -15,11 +15,11 @@ import cspOption from './csp-options.js'
 import passport from 'passport';
 import { getProduit } from './model/produit.js';
 import { getPanierUtilisateur, addToPanier, removeFromPanier, emptyPanier } from './model/panier.js';
-import { getCommande, soumettreCommande, modifyEtatCommande, getEtatCommande } from './model/commande.js';
+import { getCommande,getCommande_panier, soumettreCommande, modifyEtatCommande, getEtatCommande } from './model/commande.js';
 import { validateId, validatePanier,isMotPasseValid,isCourrielValid } from './validation.js';
 import { addUtilisateur } from './model/utilisateur.js'
 import './authentification.js'
-import middlewareSse from './middleware-sse.js';
+import middlewareSse from './middleware-sse.js'
 
 // Créer un serveur
 const app = express();
@@ -72,18 +72,14 @@ app.get('/', async (request, response) => {
 app.get('/connexion', (request, response) => {
     response.render('connexion', {
         titre: 'Connexion',
-        styles: ['/css/normalize.css', '/css/style.css'],
-        scripts: ['/js/connexion.js'],
-        bouton: 'Connecter',
         user: request.user,
         admin: request.user && request.user.id_type_utilisateur === 2,
-        
     })
 
     
 });
 
-app.post('/api/connexion', (request, response, next) => {
+app.post('/connexion', (request, response, next) => {
 
     if (isCourrielValid(request.body.courriel) && isMotPasseValid(request.body.mot_de_passe)) {
 
@@ -94,7 +90,6 @@ app.post('/api/connexion', (request, response, next) => {
             }
             else if (!utilisateur) {
                 response.status(401).json(info);
-                console.log('api/connexion route 5141588');
             }
             else {
                 request.logIn(utilisateur, (erreur) => {
@@ -114,8 +109,14 @@ app.post('/api/connexion', (request, response, next) => {
     }
 });
 
+app.get('/inscription', async (request, response) => {
+    response.render('inscription', {
+        title: 'Inscription',
+        
+    });
+});
 
-app.post('/api/inscription', async (request, response, next) => {
+app.post('/inscription', async (request, response, next) => {
     
     if(isCourrielValid(request.body.courriel) &&
     isMotPasseValid(request.body.motPasse)) {
@@ -148,13 +149,15 @@ app.post('/api/inscription', async (request, response, next) => {
 app.get('/panier', async (request, response) => {
     let panier = [];
     let status = 200;
+    if(!request.user) {
+        return response.status(401).end();
+    }
 
     try {
-        // Assurez-vous que request.user contient l'ID de l'utilisateur connecté
+        
         const panierUtilisateur = await getPanierUtilisateur(request.user.id_utilisateur);
         panier = panierUtilisateur || [];
     } catch (erreur) {
-        console.error("Erreur lors de la récupération du panier :", erreur);
         status = 500;
     }
 
@@ -165,16 +168,7 @@ app.get('/panier', async (request, response) => {
         user: request.user,
         admin: request.user && request.user.id_type_utilisateur === 2
     });
-    console.log("Panier rendu:", panier);
-});
-app.get('/panier', async (request, response) => {
-    let panier = await getPanier()
-    response.render('panier', {
-        title: 'Panier',
-        produit: panier,
-        estVide: panier.length <= 0
-    });
-    console.log(panier)
+
 });
 
 
@@ -201,7 +195,7 @@ app.patch('/panier', async (request, response) => {
         return response.status(401).end();
     }
     if (validateId(request.body.idProduit)) {
-        removeFromPanier(request.body.idProduit);
+        removeFromPanier(request.user.id_utilisateur,request.body.idProduit);
         response.sendStatus(200);
     }
     else {
@@ -211,7 +205,11 @@ app.patch('/panier', async (request, response) => {
 
 // Route pour vider le panier
 app.delete('/panier', async (request, response) => {
-    emptyPanier();
+    if(!request.user) {
+        return response.status(401).end();
+    }
+
+    emptyPanier(request.user.id_utilisateur);
     response.sendStatus(200);
 });
 
@@ -240,9 +238,8 @@ app.get('/commande', async (request, response) => {
             user: request.user,
             admin: request.user && request.user.id_type_utilisateur === 2
         });
-        console.log(commandes)
+
     } catch (error) {
-        console.error('Error in /commande route:', error);
         response.status(500).end();
     }
     
@@ -251,53 +248,52 @@ app.get('/commande', async (request, response) => {
 // Route pour soumettre le panier
 app.post('/commande', async (request, response) => {
     if (await validatePanier(request.user.id_utilisateur)) {
-
         if (!request.user) {
-        
             return response.status(401).end();
         }
-
+        
         soumettreCommande(request.user.id_utilisateur);
-        let id = await request.user.id_utilisateur
+        const donnée_commande = await getCommande_panier(request.user.id_utilisateur);
+
         response.pushJson({
-                id : id
+            data : donnée_commande
         }, 'ajout-commande');
         response.sendStatus(201);
-    }
-    else {
+    } else {
         response.sendStatus(400);
     }
 });
 
 // Route pour modifier l'état d'une commande
 app.patch('/commande', async (request, response) => {
+    if (!request.user) {
+        return response.status(401).end();
+    }
+
+    if (request.user.id_type_utilisateur !== 2) {
+        return response.status(403).end();
+    }
+
     if (validateId(request.body.idCommande) &&
         validateId(request.body.idEtatCommande)) {
-            let id = request.body.idCommande;
-            let etat = request.body.idEtatCommande;
-        modifyEtatCommande(
-            id,
-            etat
-        );
+        let id = request.body.idCommande;
+        let etat = request.body.idEtatCommande;
+        modifyEtatCommande(id, etat);
+
         response.pushJson({
-            id : id,
-            etat : etat
-    }, 'etat-commande');
+            id: id,
+            etat: etat
+        }, 'etat-commande');
+
         response.sendStatus(200);
-    }
-    else {
+    } else {
         response.sendStatus(400);
     }
 });
 
 
 
-app.get('/inscription', async (request, response) => {
-    response.render('inscription', {
-        title: 'Inscription',
-        
-    });
-});
+
 
 app.post('/deconnexion', (request, response, next) => {
     // Déconnecter l'utilisateur
@@ -309,11 +305,6 @@ app.post('/deconnexion', (request, response, next) => {
         // Rediriger l'utilisateur vers une autre page
         response.redirect('/');
     });
-});
-// Renvoyer une erreur 404 pour les routes non définies
-app.use(function (request, response) {
-    // Renvoyer simplement une chaîne de caractère indiquant que la page n'existe pas
-    response.status(404).send(request.originalUrl + ' not found.');
 });
 
 app.get('/api/notifs', (request, response) => {
@@ -328,6 +319,15 @@ app.get('/api/notifs', (request, response) => {
     }
     response.initStream();
 });
+
+
+// Renvoyer une erreur 404 pour les routes non définies
+app.use(function (request, response) {
+    // Renvoyer simplement une chaîne de caractère indiquant que la page n'existe pas
+    response.status(404).send(request.originalUrl + ' not found.');
+});
+
+
 
 if(process.env.NODE_ENV === 'development'){
     let credentials = {

@@ -12,12 +12,12 @@ async function inscription(event) {
         nom: inputMotPasse.value
     };
 
-    let response = await fetch('/api/inscription', {
+    let response = await fetch('/inscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     });
-    console.log(data)
+
 
     if(response.ok) {
         location.replace('/connexion');

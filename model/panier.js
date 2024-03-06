@@ -33,7 +33,6 @@ export const getPanierUtilisateur = async (idUtilisateur) => {
         WHERE id_etat_commande = 1 AND id_utilisateur = ?;`,
         [idUtilisateur]
     );
-    console.log("Panier utilisateur:", panier);
     return panier;
 }
 
@@ -43,62 +42,57 @@ export const getPanierUtilisateur = async (idUtilisateur) => {
  * @param {Number} quantite La quantité du produit à ajouter.
  */
 export const addToPanier = async (idUtilisateur, idProduit, quantite) => {
-    try {
-        let connection = await connectionPromise;
 
-        // On regarde si la commande du panier existe
-        let commandePanier = await connection.get(
-            `SELECT id_commande 
-            FROM commande 
-            WHERE id_etat_commande = 1 AND id_utilisateur = ?`,
+    let connection = await connectionPromise;
+
+    // On regarde si la commande du panier existe
+    let commandePanier = await connection.get(
+        `SELECT id_commande 
+        FROM commande 
+        WHERE id_etat_commande = 1 AND id_utilisateur = ?`,
+        [idUtilisateur]
+    );
+
+    // On ajoute la commande du panier si elle n'existe pas
+    let idCommande;
+    if (!commandePanier) {
+        let result = await connection.run(
+            `INSERT INTO commande(id_utilisateur, id_etat_commande)
+            VALUES(?, 1)`,
             [idUtilisateur]
         );
 
-        // On ajoute la commande du panier si elle n'existe pas
-        let idCommande;
-        if (!commandePanier) {
-            let result = await connection.run(
-                `INSERT INTO commande(id_utilisateur, id_etat_commande)
-                VALUES(?, 1)`,
-                [idUtilisateur]
-            );
-
-            idCommande = result.lastID;
-        } else {
-            idCommande = commandePanier.id_commande;
-        }
-
-        // On recherche si le produit en paramètre existe déjà dans notre panier
-        let entreePanier = await connection.get(
-            `SELECT quantite 
-            FROM commande_produit 
-            INNER JOIN commande ON commande_produit.id_commande = commande.id_commande
-            WHERE id_etat_commande = 1 AND id_produit = ? AND commande.id_utilisateur = ?;`,
-            [idProduit, idUtilisateur]
-        );
-
-        if (entreePanier) {
-            // Si le produit existe déjà dans le panier, on incrémente sa quantité
-            await connection.run(
-                `UPDATE commande_produit 
-                SET quantite = ?
-                WHERE id_commande = ? AND id_produit = ?;`,
-                [quantite + entreePanier.quantite, idCommande, idProduit]
-            );
-        } else {
-            // Si le produit n'existe pas dans le panier, on l'insère dedans
-            await connection.run(
-                `INSERT INTO commande_produit(id_commande, id_produit, quantite)
-                VALUES(?, ?, ?);`,
-                [idCommande, idProduit, quantite]
-            );
-        }
-
-        console.log('Produit ajouté au panier avec succès');
-    } catch (error) {
-        console.error('Une erreur s\'est produite lors de l\'ajout au panier:', error);
-        throw error; // Propage l'erreur pour la gestion à un niveau supérieur si nécessaire
+        idCommande = result.lastID;
+    } else {
+        idCommande = commandePanier.id_commande;
     }
+
+    // On recherche si le produit en paramètre existe déjà dans notre panier
+    let entreePanier = await connection.get(
+        `SELECT quantite 
+        FROM commande_produit 
+        INNER JOIN commande ON commande_produit.id_commande = commande.id_commande
+        WHERE id_etat_commande = 1 AND id_produit = ? AND commande.id_utilisateur = ?;`,
+        [idProduit, idUtilisateur]
+    );
+
+    if (entreePanier) {
+        // Si le produit existe déjà dans le panier, on incrémente sa quantité
+        await connection.run(
+            `UPDATE commande_produit 
+            SET quantite = ?
+            WHERE id_commande = ? AND id_produit = ?;`,
+            [quantite + entreePanier.quantite, idCommande, idProduit]
+        );
+    } else {
+        // Si le produit n'existe pas dans le panier, on l'insère dedans
+        await connection.run(
+            `INSERT INTO commande_produit(id_commande, id_produit, quantite)
+            VALUES(?, ?, ?);`,
+            [idCommande, idProduit, quantite]
+        );
+    }
+  
 };
 
 
@@ -106,7 +100,7 @@ export const addToPanier = async (idUtilisateur, idProduit, quantite) => {
  * Retire un produit du panier dans la base de données.
  * @param {Number} idProduit L'identifiant du produit à retirer.
  */
-export const removeFromPanier = async (idProduit) => {
+export const removeFromPanier = async (idUtilisateur, idProduit) => {
     let connection = await connectionPromise;
 
     await connection.run(
@@ -115,17 +109,18 @@ export const removeFromPanier = async (idProduit) => {
             id_commande = (
                 SELECT id_commande 
                 FROM commande 
-                WHERE id_etat_commande = 1
+                WHERE id_etat_commande = 1 AND id_utilisateur = ?
             ) AND
             id_produit = ?;`,
-        [idProduit]
+        [idUtilisateur, idProduit]
     );
-}
+};
 
 /**
- * Vide le panier dans la base de données
+ * Vide le panier d'un utilisateur spécifique dans la base de données
+ * @param {number} idUtilisateur - L'identifiant de l'utilisateur dont le panier doit être vidé
  */
-export const emptyPanier = async () => {
+export const emptyPanier = async (idUtilisateur) => {
     let connection = await connectionPromise;
 
     await connection.run(
@@ -134,6 +129,8 @@ export const emptyPanier = async () => {
             SELECT id_commande 
             FROM commande 
             WHERE id_etat_commande = 1
-        );`
+            AND id_utilisateur = ?
+        );`,
+        [idUtilisateur]
     );
-}
+};

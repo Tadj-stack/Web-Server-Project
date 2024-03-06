@@ -6,24 +6,16 @@ let boutons = document.querySelectorAll('.menu input[type=button]');
  * @param {MouseEvent} event Objet d'information sur l'événement.
  */
 const addToPanier = async (event) => {
-    try {
-        const idProduit = parseInt(event.target.parentNode.dataset.idProduit);
-        const data = { idProduit };
 
-        const response = await fetch('/panier', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
+    const idProduit = parseInt(event.target.parentNode.dataset.idProduit);
+    const data = { idProduit };
 
-        if (response.ok) {
-            console.log('Produit ajouté au panier avec succès');
-        } else {
-            console.error('Échec de l\'ajout au panier:', response.status, response.statusText);
-        }
-    } catch (error) {
-        console.error('Une erreur s\'est produite lors de l\'ajout au panier:', error);
-    }
+    const response = await fetch('/panier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+
 };
 // Ajoute l'exécution de la fonction "addToPanier" pour chaque bouton d'ajout 
 // au panier lorsque l'on clique dessus.
